@@ -377,3 +377,24 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Release hardening: readable state consequences and explicit, optional feedback. */
+.decision-impact { margin: 18px 0; padding: 14px 18px; border: 1px solid #cbdccf; border-radius: 10px; background: #f3f8f1; color: #234b3c; }
+.decision-impact > strong { display: block; margin-bottom: 8px; font-size: .86rem; }
+.decision-impact ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.decision-impact li { padding: 6px 10px; border-radius: 6px; background: #deeadf; font-size: .78rem; }
+.decision-impact p { margin: 0; font-size: .79rem; }
+.playtest-feedback { max-width: 700px; margin: 28px auto 22px; padding: 24px; background: #f8f9f4; color: #244537; border: 1px solid #cfddd0; border-radius: 12px; text-align: left; }
+.playtest-feedback h2 { font: 500 1.5rem Georgia,serif; margin: 0 0 10px; }
+.playtest-feedback p, .playtest-feedback small { font-size: .85rem; line-height: 1.5; }
+.playtest-feedback label, .playtest-feedback legend { display: block; margin: 14px 0 7px; font-size: .85rem; font-weight: 700; }
+.playtest-feedback fieldset { border: 0; padding: 0; margin: 14px 0; }
+.feedback-rating, .feedback-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.feedback-rating button { min-width: 42px; min-height: 42px; border: 1px solid #9bb9a6; background: white; color: #244537; border-radius: 7px; }
+.feedback-rating button.selected, .feedback-rating button[aria-pressed="true"] { background: #296d50; color: white; }
+.playtest-feedback select, .playtest-feedback textarea { display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #9db7a7; border-radius: 7px; background: white; color: #20372e; }
+.playtest-feedback textarea { resize: vertical; }
+.feedback-actions { margin-top: 16px; }
+.feedback-actions button, .feedback-actions a { min-height: 42px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 640px) { .playtest-feedback { padding: 16px; margin: 20px 0; } .feedback-actions > * { flex: 1 0 100%; } }
