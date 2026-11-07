@@ -1,6 +1,6 @@
 import type { StoryScene } from "./types";
 
-const art = (chapter: number, file: string) => `/images/arc-two/${String(chapter).padStart(2, "0")}_${file}.webp`;
+const art = (chapter: number, file: string) => `${import.meta.env.BASE_URL}images/arc-two/${String(chapter).padStart(2, "0")}_${file}.webp`;
 
 export const arcTwoScenes: StoryScene[] = [
   {
