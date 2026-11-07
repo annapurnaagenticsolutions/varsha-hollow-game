@@ -1,53 +1,68 @@
-name: Deploy Vite App to GitHub Pages
+name: Verify and deploy Varsha Hollow
 
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: varsha-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies from lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm check
+      - name: Deterministic game tests
+        run: pnpm test
+      - name: Build static site
+        run: pnpm build
+      - name: Confirm deployable output
+        run: |
+          test -s dist/public/index.html
+          test -s dist/public/images/arc-two/06_scent_wet_earth.webp
+          grep -q 'varsha-hollow-game/assets/' dist/public/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: varsha-static-preview
+          path: dist/public
+          if-no-files-found: error
+          retention-days: 7
+
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          name: varsha-static-preview
+          path: dist/public
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
-          # Note: The build script outputs to `dist/public` as seen in the screenshot
-          path: './dist/public'
-
-      - name: Deploy to GitHub Pages
+          path: dist/public
+      - uses: actions/deploy-pages@v4
         id: deployment
-        uses: actions/deploy-pages@v4
