@@ -1,4 +1,4 @@
-import type { ArcEvaluation, Choice, Effects, GameState, LegacyConsequence, ResourceKey, SlimeKey, StoryScene } from "./types";
+import type { ArcEvaluation, Choice, Effects, GameState, LegacyConsequence, DecisionRecord, ResourceKey, SlimeKey, StoryScene } from "./types";
 
 export const SAVE_KEY = "varsha-hollow-save-v1";
 
@@ -221,10 +221,10 @@ export function migrateGameState(value: unknown, maxScenes = 30): GameState | nu
     return typeof item.sceneId === "string" && typeof item.choiceId === "string" &&
       item.sceneId.length <= 100 && item.choiceId.length <= 100 &&
       (item.approach === "Care" || item.approach === "Inquiry" || item.approach === "Action")
-      ? [{ sceneId: item.sceneId, choiceId: item.choiceId, approach: item.approach }] : [];
+      ? [{ sceneId: item.sceneId, choiceId: item.choiceId, approach: item.approach as DecisionRecord["approach"] }] : [];
   });
   const previousArcs = Array.isArray(parsed.completedArcs) ? parsed.completedArcs : [];
-  const completedArcs = [...new Set(previousArcs.filter((arc): arc is number => arc === 1 || arc === 2))];
+  const completedArcs = Array.from(new Set(previousArcs.filter((arc): arc is number => arc === 1 || arc === 2)));
   if (parsed.version === 1 && sceneIndex >= 15 && !completedArcs.includes(1)) completedArcs.push(1);
 
   return {
@@ -252,7 +252,7 @@ export function migrateGameState(value: unknown, maxScenes = 30): GameState | nu
       safeRoofs: number(village.safeRoofs, initial.village.safeRoofs, 40),
       marketStalls: number(village.marketStalls, initial.village.marketStalls, 50),
     },
-    unlockedSlimes: [...new Set((Array.isArray(parsed.unlockedSlimes) ? parsed.unlockedSlimes : []).filter((key): key is SlimeKey => slimes.includes(key as SlimeKey)))],
+    unlockedSlimes: Array.from(new Set((Array.isArray(parsed.unlockedSlimes) ? parsed.unlockedSlimes : []).filter((key): key is SlimeKey => slimes.includes(key as SlimeKey)))),
     resources: {
       timber: number(resources.timber, initial.resources.timber, 99),
       tiles: number(resources.tiles, initial.resources.tiles, 99),
