@@ -45,3 +45,13 @@ A secure hosted collection pipeline, consent language and abuse controls are req
 - Automated analytics platform and hosted feedback storage.
 
 Do not present this PR as investment-ready or production certified until those gates pass.
+
+
+## Offline player research aggregation (new)
+1. Collect JSON feedback exports from consenting adult playtesters using an approved channel.
+2. Place each export in a restricted local directory (do not commit these data to Git).
+3. Run `node tools/feedback-summary.mjs ./collected-playtests`.
+4. Store only the aggregate summary in investor reporting. Review raw comments separately, with access controls and an appropriate retention policy.
+5. Use a separate source-tagged session dataset for cohort retention; the voluntary exports cannot independently establish unique-player or D1/D7 metrics.
+
+This script intentionally excludes raw comments, choice logs and filenames from its output. It is not an analytics server or a substitute for observed player behavior.
