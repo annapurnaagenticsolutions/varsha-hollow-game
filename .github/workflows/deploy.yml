@@ -30,6 +30,8 @@ jobs:
         run: pnpm check
       - name: Deterministic game tests
         run: pnpm test
+      - name: Offline feedback aggregation tests
+        run: node --test tests/feedback-summary.test.mjs
       - name: Build static site
         run: pnpm build
       - name: Confirm deployable output
