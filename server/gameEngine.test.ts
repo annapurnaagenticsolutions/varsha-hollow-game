@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { scenes } from "../client/src/game/chapters";
@@ -9,6 +9,9 @@ import {
   createInitialState,
   evaluateArc,
   migrateGameState,
+  saveGame,
+  loadGame,
+  clearSave,
 } from "../client/src/game/engine";
 
 describe("Varsha Hollow narrative engine", () => {
@@ -149,6 +152,21 @@ describe("Varsha Hollow narrative engine", () => {
     const changes = summarizeImpact(before, after);
     expect(changes).toContain("Empathy +1");
     expect(changes).toContain("Meera bond +1");
+  });
+
+  it("allows play without crashing when browser storage is blocked", () => {
+    vi.stubGlobal("localStorage", {
+      getItem() { throw new Error("SecurityError"); },
+      setItem() { throw new Error("QuotaExceededError"); },
+      removeItem() { throw new Error("SecurityError"); },
+    });
+    try {
+      expect(saveGame(createInitialState())).toBe(false);
+      expect(loadGame()).toBeNull();
+      expect(clearSave()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
 });
