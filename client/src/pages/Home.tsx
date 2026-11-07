@@ -316,6 +316,7 @@ function TrainingChallenge({
 
 export default function Home() {
   const [game, setGame] = useState<GameState | null>(() => loadGame());
+  const [saveUnavailable, setSaveUnavailable] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [resolution, setResolution] = useState<Choice | null>(null);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -323,7 +324,7 @@ export default function Home() {
   const [trainingFeedback, setTrainingFeedback] = useState<{ type: "success" | "retry"; message: string } | null>(null);
 
   useEffect(() => {
-    if (game) saveGame(game);
+    if (game) setSaveUnavailable(!saveGame(game));
   }, [game]);
 
   const scene = game && game.sceneIndex < scenes.length ? scenes[game.sceneIndex] : null;
@@ -413,6 +414,8 @@ export default function Home() {
           <HomeIcon size={17} /> Ledger
         </button>
       </header>
+
+      {saveUnavailable && <p className="save-warning" role="status">This browser is blocking local saves. You can continue playing, but your progress may be lost after closing this page.</p>}
 
       <div className="game-layout">
         <aside id="game-ledger" className={`game-ledger ${ledgerOpen ? "open" : ""}`}>
