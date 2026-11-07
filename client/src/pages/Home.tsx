@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { scenes } from "@/game/chapters";
+import { summarizeImpact } from "@/game/impact";
+import PlaytestFeedback from "@/components/PlaytestFeedback";
 import {
   applyChoice,
   clearSave,
@@ -236,6 +238,7 @@ function ArcTransition({ state, onContinue, onRestart }: { state: GameState; onC
           <h3>Forty Roofs Before the Rain</h3>
           <p>Eleven roofs are dangerous. Clay Slimes can shape earth—but first the village must learn what their shapes mean.</p>
         </div>
+        <PlaytestFeedback state={state} arc="one" />
         <div className="completion-actions">
           <button className="primary-action" onClick={onContinue}>Begin Arc Two <ChevronRight size={17} /></button>
           <button className="secondary-action" onClick={onRestart}><RotateCcw size={17} /> Replay Arc One</button>
@@ -275,6 +278,7 @@ function Completion({ state, onRestart }: { state: GameState; onRestart: () => v
           <h3>The Seven-Stall Promise</h3>
           <p>Recovery will attract traders, pressure, and Leela—the specialist who refuses to let generosity become fraud.</p>
         </div>
+        <PlaytestFeedback state={state} arc="two" />
         <button className="secondary-action" onClick={onRestart}><RotateCcw size={17} /> Replay Chapters 1–10</button>
       </section>
     </main>
@@ -312,6 +316,7 @@ function TrainingChallenge({
 
 export default function Home() {
   const [game, setGame] = useState<GameState | null>(() => loadGame());
+  const [saveUnavailable, setSaveUnavailable] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [resolution, setResolution] = useState<Choice | null>(null);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -319,7 +324,7 @@ export default function Home() {
   const [trainingFeedback, setTrainingFeedback] = useState<{ type: "success" | "retry"; message: string } | null>(null);
 
   useEffect(() => {
-    if (game) saveGame(game);
+    if (game) setSaveUnavailable(!saveGame(game));
   }, [game]);
 
   const scene = game && game.sceneIndex < scenes.length ? scenes[game.sceneIndex] : null;
@@ -330,6 +335,7 @@ export default function Home() {
   const activeArc = scene && scene.chapter <= 5 ? 1 : 2;
   const arcChapters = activeArc === 1 ? [1, 2, 3, 4, 5] : [6, 7, 8, 9, 10];
   const trainingComplete = !scene?.training || trainingFeedback?.type === "success";
+  const projectedImpact = game && scene && resolution ? summarizeImpact(game, applyChoice(game, scene, resolution)) : [];
 
   const begin = () => {
     clearSave();
@@ -404,13 +410,15 @@ export default function Home() {
           <span><BookOpen size={15} /> Arc {activeArc === 1 ? "One" : "Two"} · {progress}% overall</span>
           <Meter value={progress} max={100} tone="green" />
         </div>
-        <button className="ledger-toggle" onClick={() => setLedgerOpen(!ledgerOpen)}>
+        <button className="ledger-toggle" aria-expanded={ledgerOpen} aria-controls="game-ledger" onClick={() => setLedgerOpen(!ledgerOpen)}>
           <HomeIcon size={17} /> Ledger
         </button>
       </header>
 
+      {saveUnavailable && <p className="save-warning" role="status">This browser is blocking local saves. You can continue playing, but your progress may be lost after closing this page.</p>}
+
       <div className="game-layout">
-        <aside className={`game-ledger ${ledgerOpen ? "open" : ""}`}>
+        <aside id="game-ledger" className={`game-ledger ${ledgerOpen ? "open" : ""}`}>
           <GameLedger state={game} />
         </aside>
 
@@ -477,6 +485,12 @@ export default function Home() {
                 <h2>Your choice changes the moment</h2>
                 <p>{resolution.result}</p>
                 <div className="reflection"><Sparkles size={16} /><span>{resolution.reflection}</span></div>
+                <div className="decision-impact" aria-label="Effects of your decision">
+                  <strong>What changed</strong>
+                  {projectedImpact.length ? (
+                    <ul>{projectedImpact.slice(0, 6).map((item) => <li key={item}>{item}</li>)}</ul>
+                  ) : <p>Some consequences emerge later in your journey.</p>}
+                </div>
                 <button className="primary-action" onClick={continueStory}>
                   {game.sceneIndex === scenes.length - 1 ? "Complete the arc" : "Continue"}<ChevronRight size={18} />
                 </button>

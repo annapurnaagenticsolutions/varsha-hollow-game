@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { scenes } from "../client/src/game/chapters";
+import { summarizeImpact } from "../client/src/game/impact";
 import {
   applyChoice,
   completeArc,
   createInitialState,
   evaluateArc,
   migrateGameState,
+  saveGame,
+  loadGame,
+  clearSave,
 } from "../client/src/game/engine";
 
 describe("Varsha Hollow narrative engine", () => {
@@ -48,8 +52,8 @@ describe("Varsha Hollow narrative engine", () => {
 
   it("adds Arc Two art, Clay Slime training, and the tactile marker interaction", () => {
     const arcTwo = scenes.filter((scene) => scene.chapter >= 6);
-    expect(arcTwo.every((scene) => scene.image?.startsWith("/images/arc-two/"))).toBe(true);
-    expect(arcTwo.every((scene) => scene.image && existsSync(join(process.cwd(), "client/public", scene.image)))).toBe(true);
+    expect(arcTwo.every((scene) => scene.image?.includes("/images/arc-two/"))).toBe(true);
+    expect(arcTwo.every((scene) => scene.image && existsSync(join(process.cwd(), "client/public/images", scene.image.split("/images/")[1])))).toBe(true);
     expect(arcTwo.some((scene) => scene.training?.correctOrder.join(",") === "leave-open,brace,fill")).toBe(true);
 
     const discovery = scenes.find((scene) => scene.id === "earth-riverbed")!;
@@ -101,4 +105,68 @@ describe("Varsha Hollow narrative engine", () => {
     const twice = completeArc(once, 1);
     expect(twice.completedArcs).toEqual([1]);
   });
+  it("sanitizes damaged and out-of-range local saves instead of trusting browser state", () => {
+    expect(migrateGameState({ version: 22 })).toBeNull();
+    expect(migrateGameState([])).toBeNull();
+    const state = migrateGameState({
+      version: 2, sceneIndex: 999, stats: { empathy: -77, wisdom: "bad" },
+      relationships: null, resources: { timber: -100 },
+      roofLedger: { inspected: 999, unsafe: -4 },
+      village: { stage: "Unknown", waterSecurity: 1200 },
+      unlockedSlimes: ["dew", "dew", "nonexistent"],
+      decisions: ["bad", { sceneId: "valid", choiceId: "c1", approach: "Care" }],
+    });
+    expect(state).not.toBeNull();
+    expect(state!.sceneIndex).toBe(scenes.length);
+    expect(state!.stats.empathy).toBe(0);
+    expect(state!.stats.wisdom).toBe(3);
+    expect(state!.resources.timber).toBe(0);
+    expect(state!.roofLedger.inspected).toBe(40);
+    expect(state!.roofLedger.unsafe).toBe(0);
+    expect(state!.village.stage).toBe("Survival");
+    expect(state!.unlockedSlimes).toEqual(["dew"]);
+    expect(state!.decisions).toHaveLength(1);
+  });
+
+  it("supports a complete deterministic story walkthrough for every choice position", () => {
+    for (const choicePosition of [0, 1, 2]) {
+      let state = createInitialState();
+      for (const scene of scenes) {
+        const previousState = state;
+        state = applyChoice(state, scene, scene.choices[choicePosition]);
+        expect(state.sceneIndex).toBe(previousState.sceneIndex + 1);
+        expect(state.decisions.at(-1)?.sceneId).toBe(scene.id);
+        expect(state.resources.crewEnergy).toBeGreaterThanOrEqual(0);
+        expect(state.roofLedger.inspected).toBeLessThanOrEqual(40);
+        expect(state.roofLedger.secured).toBeLessThanOrEqual(11);
+        expect(summarizeImpact(previousState, state)).toBeInstanceOf(Array);
+      }
+      expect(state.sceneIndex).toBe(30);
+      expect(state.village.stage).toBe("Recovery");
+    }
+  });
+
+  it("reflects a visible early consequence on the player-facing decision summary", () => {
+    const before = createInitialState();
+    const after = applyChoice(before, scenes[0], scenes[0].choices[0]);
+    const changes = summarizeImpact(before, after);
+    expect(changes).toContain("Empathy +1");
+    expect(changes).toContain("Meera bond +1");
+  });
+
+  it("allows play without crashing when browser storage is blocked", () => {
+    vi.stubGlobal("localStorage", {
+      getItem() { throw new Error("SecurityError"); },
+      setItem() { throw new Error("QuotaExceededError"); },
+      removeItem() { throw new Error("SecurityError"); },
+    });
+    try {
+      expect(saveGame(createInitialState())).toBe(false);
+      expect(loadGame()).toBeNull();
+      expect(clearSave()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
 });

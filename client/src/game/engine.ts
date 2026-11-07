@@ -1,4 +1,4 @@
-import type { ArcEvaluation, Choice, Effects, GameState, LegacyConsequence, ResourceKey, SlimeKey, StoryScene } from "./types";
+import type { ArcEvaluation, Choice, Effects, GameState, LegacyConsequence, DecisionRecord, ResourceKey, SlimeKey, StoryScene } from "./types";
 
 export const SAVE_KEY = "varsha-hollow-save-v1";
 
@@ -184,28 +184,89 @@ export function evaluateArcTwo(state: GameState): ArcEvaluation {
   return titles[strongest];
 }
 
-export function saveGame(state: GameState): void {
-  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+/** Storage can fail in privacy mode, sandboxed browsers and at quota. Never crash gameplay. */
+export function saveGame(state: GameState): boolean {
+  try {
+    if (typeof localStorage === "undefined") return false;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function migrateGameState(value: unknown): GameState | null {
-  if (!value || typeof value !== "object") return null;
-  const parsed = value as { version?: number } & Partial<Omit<GameState, "version">>;
+/** Validate untrusted local browser data before reconstructing a playable save. */
+export function migrateGameState(value: unknown, maxScenes = 30): GameState | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const parsed = value as Record<string, unknown>;
   if (parsed.version !== 1 && parsed.version !== 2) return null;
 
   const initial = createInitialState();
+  const record = (input: unknown): Record<string, unknown> =>
+    input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const number = (input: unknown, fallback: number, max: number): number =>
+    typeof input === "number" && Number.isFinite(input) ? clamp(Math.trunc(input), 0, max) : fallback;
+  const safeScenes = Number.isSafeInteger(maxScenes) && maxScenes > 0 ? maxScenes : 30;
+  const sceneIndex = number(parsed.sceneIndex, 0, safeScenes);
+  const stats = record(parsed.stats);
+  const relationships = record(parsed.relationships);
+  const village = record(parsed.village);
+  const resources = record(parsed.resources);
+  const roof = record(parsed.roofLedger);
+  const slimes: SlimeKey[] = ["dew", "clay", "lantern", "echo", "herb"];
+  const stages: GameState["village"]["stage"][] = ["Survival", "Recovery", "Connection", "Growth", "Identity"];
+  const sourceDecisions = Array.isArray(parsed.decisions) ? parsed.decisions : [];
+  const decisions = sourceDecisions.slice(0, safeScenes).flatMap((entry: unknown) => {
+    const item = record(entry);
+    return typeof item.sceneId === "string" && typeof item.choiceId === "string" &&
+      item.sceneId.length <= 100 && item.choiceId.length <= 100 &&
+      (item.approach === "Care" || item.approach === "Inquiry" || item.approach === "Action")
+      ? [{ sceneId: item.sceneId, choiceId: item.choiceId, approach: item.approach as DecisionRecord["approach"] }] : [];
+  });
+  const previousArcs = Array.isArray(parsed.completedArcs) ? parsed.completedArcs : [];
+  const completedArcs = Array.from(new Set(previousArcs.filter((arc): arc is number => arc === 1 || arc === 2)));
+  if (parsed.version === 1 && sceneIndex >= 15 && !completedArcs.includes(1)) completedArcs.push(1);
+
   return {
-    ...initial,
-    ...parsed,
     version: 2,
-    stats: { ...initial.stats, ...(parsed.stats ?? {}) },
-    relationships: { ...initial.relationships, ...(parsed.relationships ?? {}) },
-    village: { ...initial.village, ...(parsed.village ?? {}) },
-    unlockedSlimes: parsed.unlockedSlimes ?? [],
-    resources: { ...initial.resources, ...(parsed.resources ?? {}) },
-    roofLedger: { ...initial.roofLedger, ...(parsed.roofLedger ?? {}) },
-    completedArcs: parsed.completedArcs ?? ((parsed.sceneIndex ?? 0) >= 15 ? [1] : []),
-    decisions: parsed.decisions ?? [],
+    started: true,
+    sceneIndex,
+    stats: {
+      empathy: number(stats.empathy, initial.stats.empathy, 10),
+      wisdom: number(stats.wisdom, initial.stats.wisdom, 10),
+      practicality: number(stats.practicality, initial.stats.practicality, 10),
+    },
+    relationships: {
+      meera: number(relationships.meera, initial.relationships.meera, 10),
+      leela: number(relationships.leela, initial.relationships.leela, 10),
+      tara: number(relationships.tara, initial.relationships.tara, 10),
+      kabir: number(relationships.kabir, initial.relationships.kabir, 10),
+      dev: number(relationships.dev, initial.relationships.dev, 10),
+    },
+    slimeTrust: number(parsed.slimeTrust, initial.slimeTrust, 100),
+    prosperity: number(parsed.prosperity, initial.prosperity, 100),
+    village: {
+      stage: stages.includes(village.stage as GameState["village"]["stage"]) ? village.stage as GameState["village"]["stage"] : initial.village.stage,
+      population: number(village.population, initial.village.population, 10000),
+      waterSecurity: number(village.waterSecurity, initial.village.waterSecurity, 100),
+      safeRoofs: number(village.safeRoofs, initial.village.safeRoofs, 40),
+      marketStalls: number(village.marketStalls, initial.village.marketStalls, 50),
+    },
+    unlockedSlimes: Array.from(new Set((Array.isArray(parsed.unlockedSlimes) ? parsed.unlockedSlimes : []).filter((key): key is SlimeKey => slimes.includes(key as SlimeKey)))),
+    resources: {
+      timber: number(resources.timber, initial.resources.timber, 99),
+      tiles: number(resources.tiles, initial.resources.tiles, 99),
+      canvas: number(resources.canvas, initial.resources.canvas, 99),
+      crewEnergy: number(resources.crewEnergy, initial.resources.crewEnergy, 99),
+    },
+    roofLedger: {
+      total: 40,
+      inspected: number(roof.inspected, initial.roofLedger.inspected, 40),
+      unsafe: number(roof.unsafe, initial.roofLedger.unsafe, 11),
+      secured: number(roof.secured, initial.roofLedger.secured, 11),
+    },
+    completedArcs,
+    decisions,
   };
 }
 
@@ -219,6 +280,12 @@ export function loadGame(): GameState | null {
   }
 }
 
-export function clearSave(): void {
-  localStorage.removeItem(SAVE_KEY);
+export function clearSave(): boolean {
+  try {
+    if (typeof localStorage === "undefined") return false;
+    localStorage.removeItem(SAVE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
